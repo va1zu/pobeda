@@ -17,7 +17,7 @@ const db = getDatabase(app);
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 
 const PASS = "Tula33842";
-const TIME_LIMIT = 30;
+const TIME_LIMIT = 40;
 const OPTION_MARKS = ["A", "B", "C", "D", "E", "F"];
 const DEFAULT_FACT_TEXT = "Историческая справка для этого вопроса пока не добавлена.";
 
@@ -183,9 +183,10 @@ function shuffleArray(items) {
     return array;
 }
 
+/* ИЗМЕНЕНО: Скроллим теперь активный экран, а не весь контейнер */
 function scrollMainWrapToTop() {
-    const wrap = document.querySelector(".main-wrap");
-    if (wrap) wrap.scrollTo({ top: 0, behavior: "smooth" });
+    const activeScreen = document.querySelector(".screen.active");
+    if (activeScreen) activeScreen.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function updateMenuStats() {
