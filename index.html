@@ -52,7 +52,7 @@
                             <p class="section-kicker">Быстрый старт</p>
                             <h3 class="section-title section-title--left"><span>Выберите тему</span></h3>
                         </div>
-                        <p class="section-copy">Темы запускаются в один клик. На каждый вопрос даётся ограниченное время, а правильный ответ показывается сразу после выбора.</p>
+                        <p class="section-copy">Темы запускаются в один клик. На каждый вопрос даётся ограниченное время, а при ошибке открывается окно с правильным ответом и историческим фактом.</p>
                     </div>
 
                     <div id="game-list-container" class="theme-grid">
@@ -163,12 +163,13 @@
                             <p class="section-kicker">Редактирование вопроса</p>
                             <h2 id="editor-title">Новый вопрос</h2>
                         </div>
-                        <p class="screen-copy">Первый вариант ответа считается правильным. Остальные варианты будут перемешаны автоматически во время игры.</p>
+                        <p class="screen-copy">Укажите правильный вариант, добавьте исторический факт и при необходимости изображение. Во время игры варианты ответов перемешиваются автоматически.</p>
                     </div>
 
                     <div class="form-grid">
                         <label class="input-label" for="edit-type">Тип вопроса</label>
                         <select id="edit-type" class="input-box" onchange="window.toggleEditorFields()">
+                            <option value="choice">Угадай правильный ответ</option>
                             <option value="photo">Угадай по фото</option>
                             <option value="date">Сопоставь дату и событие</option>
                             <option value="error">Найди ошибку в тексте</option>
@@ -185,13 +186,24 @@
                         <div class="answers-box">
                             <div class="answers-box__head">
                                 <p class="section-kicker">Варианты ответа</p>
-                                <p class="text-gray">Первое поле должно содержать правильный ответ.</p>
+                                <p class="text-gray">Заполните минимум два варианта и выберите, какой из них считается правильным.</p>
                             </div>
-                            <input type="text" id="edit-opt0" placeholder="Правильный ответ" class="input-box border-green">
+                            <input type="text" id="edit-opt0" placeholder="Вариант 1" class="input-box">
                             <input type="text" id="edit-opt1" placeholder="Вариант 2" class="input-box">
                             <input type="text" id="edit-opt2" placeholder="Вариант 3" class="input-box">
                             <input type="text" id="edit-opt3" placeholder="Вариант 4" class="input-box">
                         </div>
+
+                        <label class="input-label" for="edit-correct">Правильный вариант</label>
+                        <select id="edit-correct" class="input-box">
+                            <option value="0">Вариант 1</option>
+                            <option value="1">Вариант 2</option>
+                            <option value="2">Вариант 3</option>
+                            <option value="3">Вариант 4</option>
+                        </select>
+
+                        <label class="input-label" for="edit-fact">Исторический факт</label>
+                        <textarea id="edit-fact" placeholder="Этот текст появится в окне объяснения после неверного ответа или окончания времени." class="input-box" rows="5"></textarea>
                     </div>
 
                     <div class="button-stack">
@@ -243,6 +255,27 @@
                     <div id="game-options" class="options-grid"></div>
                 </section>
             </div>
+        </div>
+
+        <div id="answer-modal" class="answer-modal" hidden>
+            <div class="answer-modal__backdrop" aria-hidden="true"></div>
+            <section class="answer-modal__card" role="dialog" aria-modal="true" aria-labelledby="answer-modal-title">
+                <p class="section-kicker">Разбор вопроса</p>
+                <h3 id="answer-modal-title" class="answer-modal__title">Историческая справка</h3>
+                <p id="answer-modal-status" class="answer-modal__status">Таймер остановлен. Прочитайте пояснение и продолжите квиз.</p>
+
+                <div class="answer-modal__block">
+                    <span class="answer-modal__label">Правильный ответ</span>
+                    <strong id="answer-modal-correct" class="answer-modal__answer">—</strong>
+                </div>
+
+                <div class="answer-modal__block">
+                    <span class="answer-modal__label">Исторический факт</span>
+                    <p id="answer-modal-fact" class="answer-modal__fact">—</p>
+                </div>
+
+                <button type="button" id="answer-modal-continue" class="btn-red">Продолжить викторину</button>
+            </section>
         </div>
 
         <div id="result" class="screen">

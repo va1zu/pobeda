@@ -17,8 +17,9 @@ const db = getDatabase(app);
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 
 const PASS = "Tula33842";
-const TIME_LIMIT = 15;
+const TIME_LIMIT = 30;
 const OPTION_MARKS = ["A", "B", "C", "D", "E", "F"];
+const DEFAULT_FACT_TEXT = "Историческая справка для этого вопроса пока не добавлена.";
 
 let myGames = [];
 let leaders = [];
@@ -80,15 +81,38 @@ function getDurationLabel(questionCount) {
 }
 
 function getQuestionTypeLabel(type) {
+    if (type === "choice") return "Угадай ответ";
     if (type === "photo") return "Угадай по фото";
     if (type === "date") return "Сопоставь дату";
-    return "Найди ошибку";
+    return "Найди историческую ошибку";
 }
 
 function getQuestionHint(type) {
+    if (type === "choice") return "Выберите один правильный ответ и уложитесь во время.";
     if (type === "photo") return "Посмотрите на изображение и выберите один правильный ответ.";
     if (type === "date") return "Сопоставьте событие и нужную дату.";
-    return "Найдите вариант, в котором нет ошибки.";
+    return "Выберите утверждение, в котором допущена историческая ошибка.";
+}
+
+function getQuestionCorrectIndex(question) {
+    const rawIndex = Number(question?.correct);
+    const options = normalizeCollection(question?.options);
+
+    if (Number.isInteger(rawIndex) && rawIndex >= 0 && rawIndex < options.length) {
+        return rawIndex;
+    }
+
+    return 0;
+}
+
+function getQuestionFact(question) {
+    const fact = String(question?.fact ?? question?.explanation ?? "").trim();
+    return fact || DEFAULT_FACT_TEXT;
+}
+
+function getCorrectAnswerText(question) {
+    const options = normalizeCollection(question?.options);
+    return options[getQuestionCorrectIndex(question)] || "Правильный ответ не указан";
 }
 
 function getResultMessage(correctAnswers, totalQuestions) {
@@ -233,8 +257,53 @@ onValue(ref(db, "feedback"), (snapshot) => {
     renderFeedbackList();
 });
 
+function stopTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+
+    const timerContainer = document.querySelector(".timer-box");
+    if (timerContainer) timerContainer.classList.remove("time-low");
+}
+
+function closeAnswerModal() {
+    const modal = document.getElementById("answer-modal");
+    const wrap = document.querySelector(".main-wrap");
+
+    if (modal) modal.hidden = true;
+    if (wrap) wrap.classList.remove("modal-open");
+}
+
+function openAnswerModal({ title, status, correctAnswer, fact }) {
+    const modal = document.getElementById("answer-modal");
+    const wrap = document.querySelector(".main-wrap");
+    if (!modal) return;
+
+    document.getElementById("answer-modal-title").innerText = title;
+    document.getElementById("answer-modal-status").innerText = status;
+    document.getElementById("answer-modal-correct").innerText = correctAnswer;
+    document.getElementById("answer-modal-fact").innerText = fact;
+
+    modal.hidden = false;
+    if (wrap) wrap.classList.add("modal-open");
+}
+
+function goToNextQuestion() {
+    closeAnswerModal();
+    currentQuestionIndex += 1;
+
+    if (activeGame && currentQuestionIndex < activeGame.questions.length) {
+        showQuestion();
+        return;
+    }
+
+    finishGame();
+}
+
 function switchScreen(screenId) {
-    if (screenId !== "game") resetTimer();
+    if (screenId !== "game") {
+        closeAnswerModal();
+        resetTimer();
+    }
 
     const screens = document.querySelectorAll(".screen");
     screens.forEach((screen) => screen.classList.remove("active"));
@@ -486,6 +555,8 @@ function openEditor(index = null) {
     const typeEl = document.getElementById("edit-type");
     const questionEl = document.getElementById("edit-q");
     const imageEl = document.getElementById("edit-img");
+    const correctEl = document.getElementById("edit-correct");
+    const factEl = document.getElementById("edit-fact");
     const opt0 = document.getElementById("edit-opt0");
     const opt1 = document.getElementById("edit-opt1");
     const opt2 = document.getElementById("edit-opt2");
@@ -499,18 +570,22 @@ function openEditor(index = null) {
         const question = normalizeCollection(game.questions)[index];
         if (!question) return;
 
-        typeEl.value = question.type || "photo";
+        typeEl.value = question.type || "choice";
         questionEl.value = question.q || "";
         imageEl.value = question.img || "";
+        correctEl.value = String(getQuestionCorrectIndex(question));
+        factEl.value = getQuestionFact(question) === DEFAULT_FACT_TEXT ? "" : getQuestionFact(question);
         opt0.value = question.options?.[0] || "";
         opt1.value = question.options?.[1] || "";
         opt2.value = question.options?.[2] || "";
         opt3.value = question.options?.[3] || "";
         editorTitle.innerText = "Редактирование вопроса";
     } else {
-        typeEl.value = "photo";
+        typeEl.value = "choice";
         questionEl.value = "";
         imageEl.value = "";
+        correctEl.value = "0";
+        factEl.value = "";
         opt0.value = "";
         opt1.value = "";
         opt2.value = "";
@@ -531,6 +606,8 @@ function saveQuestion() {
     const type = document.getElementById("edit-type").value;
     const questionText = document.getElementById("edit-q").value.trim();
     const imagePath = document.getElementById("edit-img").value.trim();
+    const factText = document.getElementById("edit-fact").value.trim();
+    const correctIndex = Number(document.getElementById("edit-correct").value);
 
     const optionsArray = [];
     for (let i = 0; i <= 3; i++) {
@@ -543,8 +620,8 @@ function saveQuestion() {
         return;
     }
 
-    if (type === "photo" && !imagePath) {
-        alert("Для вопроса с фотографией укажите путь к изображению.");
+    if (!factText) {
+        alert("Добавьте исторический факт для окна объяснения.");
         return;
     }
 
@@ -559,12 +636,18 @@ function saveQuestion() {
         return;
     }
 
+    if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= optionsArray.length) {
+        alert("Выберите корректный номер правильного варианта.");
+        return;
+    }
+
     const newQuestion = {
         type,
         q: questionText,
         img: imagePath,
         options: optionsArray,
-        correct: 0
+        correct: correctIndex,
+        fact: factText
     };
 
     if (currentEditingQuestionIndex !== null) {
@@ -625,23 +708,21 @@ function playGame(id) {
 
     currentQuestionIndex = 0;
     score = 0;
+    closeAnswerModal();
+    stopTimer();
 
     switchScreen("game");
     showQuestion();
 }
 
 function resetTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-
-    const timerContainer = document.querySelector(".timer-box");
-    if (timerContainer) timerContainer.classList.remove("time-low");
-
+    stopTimer();
+    timeLeft = TIME_LIMIT;
     updateTimerVisual(TIME_LIMIT);
 }
 
 function startTimer() {
-    resetTimer();
+    stopTimer();
     timeLeft = TIME_LIMIT;
     updateTimerVisual(timeLeft);
 
@@ -656,20 +737,14 @@ function startTimer() {
         }
 
         if (timeLeft <= 0) {
-            clearInterval(timerInterval);
-            timerInterval = null;
+            stopTimer();
             timeOut();
         }
     }, 1000);
 }
 
 function timeOut() {
-    const supportText = document.getElementById("game-support-text");
-    if (supportText) {
-        supportText.innerText = "Время вышло. Правильный ответ выделен, сейчас будет следующий вопрос.";
-    }
-
-    checkAnswer(null, false);
+    checkAnswer(null, null, { timedOut: true });
 }
 
 function showQuestion() {
@@ -685,17 +760,18 @@ function showQuestion() {
     document.getElementById("game-support-text").innerText = getQuestionHint(question.type);
 
     updateGameProgress();
+    closeAnswerModal();
 
     const badge = document.getElementById("game-format-label");
     badge.innerText = getQuestionTypeLabel(question.type);
-    badge.dataset.type = question.type || "error";
+    badge.dataset.type = question.type || "choice";
 
     const photoContainer = document.getElementById("photo-container");
     const photoEl = document.getElementById("game-photo");
 
     if (question.type === "photo") {
         photoContainer.style.display = "block";
-        photoEl.src = question.img || getPhotoPlaceholder("Нет изображения");
+        photoEl.src = question.img || getPhotoPlaceholder(question.photoLabel || "Фото скоро будет добавлено");
         photoEl.alt = question.q ? `Иллюстрация к вопросу: ${question.q}` : "Иллюстрация к вопросу";
     } else {
         photoContainer.style.display = "none";
@@ -707,7 +783,7 @@ function showQuestion() {
     const answers = shuffleArray(
         normalizeCollection(question.options).map((option, index) => ({
             text: option,
-            isCorrect: index === 0
+            isCorrect: index === getQuestionCorrectIndex(question)
         }))
     );
 
@@ -719,8 +795,9 @@ function showQuestion() {
         button.type = "button";
         button.className = "btn-answer";
         button.dataset.correct = String(answer.isCorrect);
+        button.dataset.answerText = answer.text;
         button.onclick = function () {
-            checkAnswer(button, answer.isCorrect);
+            checkAnswer(button, answer);
         };
 
         mark.className = "btn-answer__index";
@@ -736,11 +813,12 @@ function showQuestion() {
     startTimer();
 }
 
-function checkAnswer(clickedButton, isCorrect) {
-    resetTimer();
-
+function checkAnswer(clickedButton, answer, { timedOut = false } = {}) {
+    stopTimer();
     const supportText = document.getElementById("game-support-text");
     const allButtons = document.getElementById("game-options").children;
+    const question = activeGame?.questions?.[currentQuestionIndex];
+    const isCorrect = Boolean(answer?.isCorrect);
 
     for (let i = 0; i < allButtons.length; i++) {
         allButtons[i].disabled = true;
@@ -752,22 +830,30 @@ function checkAnswer(clickedButton, isCorrect) {
     if (clickedButton) {
         if (isCorrect) {
             score += 1;
-            if (supportText) supportText.innerText = "Верно. Отличный ответ, переходим дальше.";
+            if (supportText) supportText.innerText = "Верно. Отличный ответ, переходим к следующему вопросу.";
         } else {
             clickedButton.classList.add("wrong");
-            if (supportText) supportText.innerText = "Неверно. Посмотрите на правильный вариант, затем будет следующий вопрос.";
+            if (supportText) supportText.innerText = "Неверно. Таймер остановлен, прочитайте объяснение и продолжите квиз.";
         }
+    } else if (timedOut && supportText) {
+        supportText.innerText = "Время вышло. Таймер остановлен, прочитайте объяснение и продолжите квиз.";
     }
 
-    setTimeout(() => {
-        currentQuestionIndex += 1;
+    if (isCorrect) {
+        window.setTimeout(goToNextQuestion, 1000);
+        return;
+    }
 
-        if (currentQuestionIndex < activeGame.questions.length) {
-            showQuestion();
-        } else {
-            finishGame();
-        }
-    }, 1500);
+    if (!question) return;
+
+    openAnswerModal({
+        title: timedOut ? "Время вышло" : "Неверный ответ",
+        status: timedOut
+            ? "Отсчёт времени остановлен. Ознакомьтесь с правильным ответом и продолжите квиз."
+            : "Отсчёт времени остановлен. Прочитайте пояснение, чтобы перейти к следующему вопросу.",
+        correctAnswer: getCorrectAnswerText(question),
+        fact: getQuestionFact(question)
+    });
 }
 
 function finishGame() {
@@ -842,6 +928,11 @@ document.addEventListener("DOMContentLoaded", () => {
         adminPass.addEventListener("keydown", (event) => {
             if (event.key === "Enter") checkLogin();
         });
+    }
+
+    const continueButton = document.getElementById("answer-modal-continue");
+    if (continueButton) {
+        continueButton.addEventListener("click", goToNextQuestion);
     }
 });
 
