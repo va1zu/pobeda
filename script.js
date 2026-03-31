@@ -274,15 +274,17 @@ function closeAnswerModal() {
     if (wrap) wrap.classList.remove("modal-open");
 }
 
-function openAnswerModal({ title, status, correctAnswer, fact }) {
+function openAnswerModal({ title, status, correctAnswer, fact, showCorrectAnswer = true }) {
     const modal = document.getElementById("answer-modal");
     const wrap = document.querySelector(".main-wrap");
     if (!modal) return;
 
+    const correctBlock = document.getElementById("answer-modal-correct-block");
     document.getElementById("answer-modal-title").innerText = title;
     document.getElementById("answer-modal-status").innerText = status;
     document.getElementById("answer-modal-correct").innerText = correctAnswer;
     document.getElementById("answer-modal-fact").innerText = fact;
+    if (correctBlock) correctBlock.hidden = !showCorrectAnswer;
 
     modal.hidden = false;
     if (wrap) wrap.classList.add("modal-open");
@@ -834,10 +836,10 @@ function checkAnswer(clickedButton, answer, { timedOut = false } = {}) {
             if (supportText) supportText.innerText = "Верно. Отличный ответ, переходим к следующему вопросу.";
         } else {
             clickedButton.classList.add("wrong");
-            if (supportText) supportText.innerText = "Неверно. Таймер остановлен, прочитайте объяснение и продолжите квиз.";
+            if (supportText) supportText.innerText = "Неверно. Таймер остановлен, прочитайте исторический факт и продолжите квиз.";
         }
     } else if (timedOut && supportText) {
-        supportText.innerText = "Время вышло. Таймер остановлен, прочитайте объяснение и продолжите квиз.";
+        supportText.innerText = "Время вышло. Таймер остановлен, прочитайте исторический факт и продолжите квиз.";
     }
 
     if (isCorrect) {
@@ -850,10 +852,11 @@ function checkAnswer(clickedButton, answer, { timedOut = false } = {}) {
     openAnswerModal({
         title: timedOut ? "Время вышло" : "Неверный ответ",
         status: timedOut
-            ? "Отсчёт времени остановлен. Ознакомьтесь с правильным ответом и продолжите квиз."
-            : "Отсчёт времени остановлен. Прочитайте пояснение, чтобы перейти к следующему вопросу.",
+            ? "Время истекло. Ответ не засчитан. Прочитайте исторический факт и продолжите квиз."
+            : "Ответ неверный. Прочитайте исторический факт и продолжите квиз.",
         correctAnswer: getCorrectAnswerText(question),
-        fact: getQuestionFact(question)
+        fact: getQuestionFact(question),
+        showCorrectAnswer: false
     });
 }
 

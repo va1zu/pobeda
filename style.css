@@ -1500,22 +1500,19 @@ button.wrong,
     }
 
     .game-top {
-        top: 8px;
-        margin: 10px 16px 0;
-        padding: 12px 14px;
-        gap: 10px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-template-areas:
-            "meta meta"
-            "timer step";
-        border-radius: 22px;
-        box-shadow:
-            0 12px 22px rgba(18, 11, 11, 0.18),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        top: 10px;
+        margin: 10px 14px 0;
+        padding: 0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        background: transparent;
+        border: none;
+        box-shadow: none;
     }
 
     .game-top__meta {
-        grid-area: meta;
+        display: none;
     }
 
     .game-top .eyebrow {
@@ -1531,28 +1528,62 @@ button.wrong,
     }
 
     .timer-box {
-        grid-area: timer;
+        width: 58px;
+        height: 58px;
+        min-width: 58px;
+        padding: 0;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 0;
+        background: rgba(55, 30, 27, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.09);
     }
 
     .game-step-wrap {
-        grid-area: step;
+        width: 58px;
+        height: 58px;
+        min-width: 58px;
+        padding: 0;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 0;
+        background: rgba(55, 30, 27, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.09);
     }
 
-    .timer-box,
-    .game-step-wrap {
-        min-width: 0;
-        padding: 9px 10px;
-        border-radius: 16px;
+    .timer-box::after {
+        background:
+            linear-gradient(90deg, rgba(224, 186, 106, 0.18) 0 var(--timer-fill), transparent var(--timer-fill) 100%);
     }
 
     .timer-box__label,
     .game-step-label {
-        font-size: 10px;
+        margin: 0;
+        font-size: 7px;
+        line-height: 1;
+        letter-spacing: 0.08em;
+        color: rgba(247, 226, 184, 0.72);
+    }
+
+    .timer-box__label {
+        margin-bottom: 2px;
     }
 
     .timer-box strong,
     .game-step {
-        font-size: 16px;
+        font-size: 12px;
+        line-height: 1;
+    }
+
+    .timer-box strong {
+        font-size: 12px;
+        font-weight: 800;
     }
 
     .progress-strip {
@@ -1587,16 +1618,15 @@ button.wrong,
         line-height: 1.5;
     }
 
-    .answer-modal__block {
-        margin-top: 12px;
-        padding: 14px;
-        border-radius: 18px;
-    }
 
     .answer-modal__fact,
     .answer-modal__answer {
         font-size: 14px;
         line-height: 1.55;
+    }
+
+    #answer-modal-correct-block[hidden] {
+        display: none;
     }
 }
 
