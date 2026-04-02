@@ -181,6 +181,11 @@
                         <div id="div-edit-img">
                             <label class="input-label" for="edit-img">Путь к изображению</label>
                             <input type="text" id="edit-img" placeholder="Например: img/photo.jpg" class="input-box">
+                            <div class="upload-row">
+                                <input type="file" id="edit-img-file" class="input-box" accept="image/*">
+                                <button type="button" id="edit-img-upload" class="btn-gold upload-btn">Загрузить фото</button>
+                            </div>
+                            <p id="edit-img-status" class="upload-status text-gray" aria-live="polite"></p>
                         </div>
 
                         <div class="answers-box">

@@ -679,6 +679,25 @@ button:disabled {
     gap: 4px;
 }
 
+.upload-row {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.upload-btn {
+    width: auto;
+    min-width: 160px;
+    padding: 14px 16px;
+    border-radius: 16px;
+}
+
+.upload-status {
+    margin-top: 8px;
+}
+
 .input-label {
     font-size: 12px;
     font-weight: 800;
@@ -1461,19 +1480,15 @@ button.wrong,
 }
 
 @media (max-width: 640px) {
-    /* ... твои предыдущие правила мобилки ... */
-
     .answer-modal {
-        padding: 16px; /* Убрали огромный padding 104px */
+        padding: 16px;
     }
 
     .answer-modal__card {
-        max-height: calc(100% - 32px); /* Убрали жесткие 340px, теперь карточка гибкая */
+        max-height: calc(100% - 32px);
         padding: 24px 18px;
         border-radius: 24px;
     }
-
-    /* ... остальные правила без изменений ... */
 
     .main-wrap {
         height: 100vh;
@@ -1482,8 +1497,38 @@ button.wrong,
     }
 
     .hero-panel {
-        min-height: 314px;
-        padding: 28px 20px 24px;
+        min-height: 300px;
+        padding: 24px 18px 20px;
+    }
+
+    .logo-box {
+        width: 150px;
+        height: 150px;
+        margin: 6px auto 10px;
+    }
+
+    .logo-img {
+        width: 116px;
+    }
+
+    .main-title {
+        font-size: clamp(34px, 8.8vw, 46px);
+        line-height: 0.95;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+    }
+
+    .hero-panel__content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .sub-title {
+        margin-top: 8px;
+        font-size: 13px;
+        line-height: 1.45;
     }
 
     .content-pad {
@@ -1624,15 +1669,72 @@ button.wrong,
         font-size: 14px;
         line-height: 1.55;
     }
-
-    #answer-modal-correct-block[hidden] {
-        display: none;
-    }
 }
 
 @media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+
+    .main-wrap {
+        height: 100vh;
+        border-radius: 20px;
+    }
+
+    .hero-panel {
+        min-height: 270px;
+        padding: 20px 14px 18px;
+        border-radius: 20px 20px 0 0;
+    }
+
+    .main-title {
+        margin-top: 2px;
+        font-size: clamp(30px, 9.2vw, 38px);
+        line-height: 0.95;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+    }
+
+    .logo-box {
+        width: 122px;
+        height: 122px;
+        margin: 4px auto 8px;
+    }
+
+    .logo-img {
+        width: 96px;
+    }
+
+    .eyebrow {
+        margin: 0 0 6px;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+    }
+
+    .sub-title {
+        display: block;
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
     .hero-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+    .stat-chip {
+        padding: 10px 8px;
+        border-radius: 14px;
+    }
+
+    .stat-chip span {
+        font-size: 24px;
+    }
+
+    .stat-chip small {
+        font-size: 9px;
     }
 
     .theme-card {

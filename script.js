@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyChsg1t0QKS_sSThC0KHZbluyNxMDkRlJo",
@@ -13,6 +14,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const STORAGE_BUCKET = String(firebaseConfig.storageBucket || "").startsWith("gs://")
+    ? String(firebaseConfig.storageBucket)
+    : `gs://${firebaseConfig.storageBucket}`;
+const storage = getStorage(app, STORAGE_BUCKET);
 
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 
@@ -30,6 +35,7 @@ let currentQuestionIndex = 0;
 let score = 0;
 let currentEditingGameId = null;
 let currentEditingQuestionIndex = null;
+let pendingUploadUrl = "";
 
 let timerInterval = null;
 let timeLeft = 0;
@@ -552,12 +558,93 @@ function toggleEditorFields() {
     imageInput.disabled = !shouldShowImage;
 }
 
+function setUploadStatus(text) {
+    const statusEl = document.getElementById("edit-img-status");
+    if (statusEl) statusEl.innerText = text || "";
+}
+
+function withTimeout(promise, ms, message) {
+    let timeoutId = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error(message)), ms);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        if (timeoutId) window.clearTimeout(timeoutId);
+    });
+}
+
+function resetImageUploadState() {
+    pendingUploadUrl = "";
+    const fileInput = document.getElementById("edit-img-file");
+    const uploadBtn = document.getElementById("edit-img-upload");
+    if (fileInput) fileInput.value = "";
+    if (uploadBtn) uploadBtn.disabled = false;
+    setUploadStatus("");
+}
+
+async function uploadSelectedImage() {
+    const type = document.getElementById("edit-type")?.value;
+    if (type !== "photo") return;
+
+    const fileInput = document.getElementById("edit-img-file");
+    const uploadBtn = document.getElementById("edit-img-upload");
+    const urlInput = document.getElementById("edit-img");
+
+    const file = fileInput?.files?.[0];
+    if (!file) {
+        setUploadStatus("Выберите файл изображения для загрузки.");
+        return;
+    }
+
+    if (!currentEditingGameId) {
+        setUploadStatus("Сначала выберите тему (редактор должен быть открыт из темы).");
+        return;
+    }
+
+    try {
+        if (uploadBtn) uploadBtn.disabled = true;
+        setUploadStatus("Загрузка фото...");
+
+        const safeName = String(file.name || "photo")
+            .replace(/[^\w.\-]+/g, "_")
+            .slice(0, 80);
+        const path = `question-images/${currentEditingGameId}/${Date.now()}_${safeName}`;
+        const objRef = storageRef(storage, path);
+
+        await withTimeout(uploadBytes(objRef, file, {
+            contentType: file.type || "image/*"
+        }), 25000, "Время ожидания загрузки истекло");
+
+        const url = await withTimeout(getDownloadURL(objRef), 10000, "Не удалось получить ссылку на загруженное фото");
+        pendingUploadUrl = url;
+        if (urlInput) urlInput.value = url;
+        setUploadStatus("Фото загружено и привязано к вопросу.");
+    } catch (error) {
+        console.error(error);
+        const code = String(error?.code || "");
+        if (code.includes("storage/unauthorized") || code.includes("storage/unauthenticated")) {
+            setUploadStatus("Нет доступа к Storage. Проверьте Firebase Storage Rules.");
+        } else if (code.includes("storage/canceled")) {
+            setUploadStatus("Загрузка отменена.");
+        } else if (code.includes("storage/retry-limit-exceeded") || String(error?.message || "").includes("Время ожидания")) {
+            setUploadStatus("Сервер не ответил вовремя. Проверьте интернет и bucket в Firebase.");
+        } else {
+            setUploadStatus("Не удалось загрузить фото. Проверьте Firebase Storage Rules, bucket и подключение.");
+        }
+    } finally {
+        if (uploadBtn) uploadBtn.disabled = false;
+    }
+}
+
 function openEditor(index = null) {
     currentEditingQuestionIndex = index;
 
     const typeEl = document.getElementById("edit-type");
     const questionEl = document.getElementById("edit-q");
     const imageEl = document.getElementById("edit-img");
+    const fileEl = document.getElementById("edit-img-file");
+    const uploadBtn = document.getElementById("edit-img-upload");
     const correctEl = document.getElementById("edit-correct");
     const factEl = document.getElementById("edit-fact");
     const opt0 = document.getElementById("edit-opt0");
@@ -576,6 +663,7 @@ function openEditor(index = null) {
         typeEl.value = question.type || "choice";
         questionEl.value = question.q || "";
         imageEl.value = question.img || "";
+        resetImageUploadState();
         correctEl.value = String(getQuestionCorrectIndex(question));
         factEl.value = getQuestionFact(question) === DEFAULT_FACT_TEXT ? "" : getQuestionFact(question);
         opt0.value = question.options?.[0] || "";
@@ -587,6 +675,7 @@ function openEditor(index = null) {
         typeEl.value = "choice";
         questionEl.value = "";
         imageEl.value = "";
+        resetImageUploadState();
         correctEl.value = "0";
         factEl.value = "";
         opt0.value = "";
@@ -598,6 +687,17 @@ function openEditor(index = null) {
 
     toggleEditorFields();
     switchScreen("editor");
+
+    if (fileEl) {
+        fileEl.onchange = () => {
+            pendingUploadUrl = "";
+            setUploadStatus(fileEl.files?.[0] ? "Файл выбран. Нажмите «Загрузить фото»." : "");
+        };
+    }
+
+    if (uploadBtn) {
+        uploadBtn.onclick = uploadSelectedImage;
+    }
 }
 
 function saveQuestion() {
@@ -620,6 +720,11 @@ function saveQuestion() {
 
     if (!questionText) {
         alert("Введите текст вопроса.");
+        return;
+    }
+
+    if (type === "photo" && !imagePath) {
+        alert("Для вопроса «Угадай по фото» добавьте ссылку на изображение или загрузите фото.");
         return;
     }
 
