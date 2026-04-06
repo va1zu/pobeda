@@ -22,7 +22,7 @@ const storage = getStorage(app, STORAGE_BUCKET);
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 
 const PASS = "Tula33842";
-const TIME_LIMIT = 40;
+const TIME_LIMIT = 60;
 const OPTION_MARKS = ["A", "B", "C", "D", "E", "F"];
 const DEFAULT_FACT_TEXT = "Историческая справка для этого вопроса пока не добавлена.";
 
@@ -338,6 +338,35 @@ function showLeaderboard() {
 
 function showFeedbackScreen() {
     switchScreen("feedback-screen");
+}
+
+function applyScreenFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get("screen");
+    if (!screen) return;
+
+    const target = document.getElementById(screen);
+    if (target && target.classList.contains("screen")) {
+        switchScreen(screen);
+    }
+}
+
+function applyFigmaExportMode() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("figma") !== "all") return;
+
+    document.body.classList.add("figma-export");
+
+    const wrap = document.querySelector(".main-wrap");
+    if (wrap) wrap.classList.add("figma-export-wrap");
+
+    const screens = document.querySelectorAll(".screen");
+    screens.forEach((screen) => {
+        screen.classList.add("active");
+    });
+
+    const modal = document.getElementById("answer-modal");
+    if (modal) modal.hidden = false;
 }
 
 function submitFeedback() {
@@ -1031,6 +1060,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updateLeaderboardUI();
     renderFeedbackList();
     toggleEditorFields();
+    applyScreenFromQuery();
+    applyFigmaExportMode();
 
     const adminPass = document.getElementById("admin-pass");
     if (adminPass) {
