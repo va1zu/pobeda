@@ -114,6 +114,7 @@
 
                     <div class="tabs">
                         <button type="button" id="tab-games" onclick="window.switchAdminTab('games')" class="btn-gold tab-active">Темы</button>
+                        <button type="button" id="tab-stats" onclick="window.switchAdminTab('stats')" class="btn-gold">Статистика</button>
                         <button type="button" id="tab-feedback" onclick="window.switchAdminTab('feedback')" class="btn-gold">Почта (<span id="fb-count">0</span>)</button>
                     </div>
 
@@ -123,6 +124,28 @@
                         </div>
                         <button type="button" onclick="window.createNewGame()" class="btn-green">Добавить тему</button>
                         <div id="admin-games-list" class="item-list"></div>
+                    </div>
+
+                    <div id="admin-section-stats" style="display: none;">
+                        <div class="helper-row">
+                            <p class="text-gray">Сводная статистика посещений и прохождений (обновляется в реальном времени).</p>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <p class="stat-card__label">Всего посещений</p>
+                                <p class="stat-card__value" id="admin-visits-total">0</p>
+                            </div>
+                            <div class="stat-card">
+                                <p class="stat-card__label">Всего прохождений викторины</p>
+                                <p class="stat-card__value" id="admin-quizzes-finished-total">0</p>
+                            </div>
+                        </div>
+
+                        <div class="helper-row mt-20">
+                            <p class="text-gray">Все результаты.</p>
+                        </div>
+                        <div id="admin-leader-tabs" class="theme-tabs" aria-label="Фильтр результатов по темам"></div>
+                        <div id="admin-leader-list" class="item-list"></div>
                     </div>
 
                     <div id="admin-section-feedback" style="display: none;">
@@ -293,6 +316,7 @@
                     <div class="result-highlight">
                         <span class="result-label">Ваш результат</span>
                         <span id="final-score" class="score-big">0 из 0</span>
+                        <span id="final-time" class="result-time">Время: 0:00</span>
                     </div>
 
                     <div class="form-grid">
@@ -322,6 +346,7 @@
                         </div>
                     </div>
 
+                    <div id="leader-theme-tabs" class="theme-tabs" aria-label="Фильтр по темам"></div>
                     <div id="leader-data" class="leader-col"></div>
                     <button type="button" onclick="window.showMenu()" class="btn-dark mt-20">Вернуться в меню</button>
                 </section>

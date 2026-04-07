@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -40,6 +40,13 @@ let pendingUploadUrl = "";
 let timerInterval = null;
 let timeLeft = 0;
 
+let gameStartedAt = 0;
+let lastGameDurationMs = 0;
+let selectedLeaderboardGameId = "all";
+let selectedAdminLeadersGameId = "all";
+
+const VISITOR_ID_KEY = "kp_visitor_id";
+
 function normalizeCollection(value) {
     if (Array.isArray(value)) return value.filter(Boolean);
     if (value && typeof value === "object") return Object.values(value).filter(Boolean);
@@ -68,6 +75,62 @@ function pluralize(count, one, few, many) {
     if (mod10 === 1 && mod100 !== 11) return one;
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
     return many;
+}
+
+function formatDurationSeconds(totalSeconds) {
+    const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const mm = Math.floor(seconds / 60);
+    const ss = String(seconds % 60).padStart(2, "0");
+    return `${mm}:${ss}`;
+}
+
+function formatDurationMs(ms) {
+    const seconds = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+    return formatDurationSeconds(seconds);
+}
+
+function getOrCreateVisitorId() {
+    try {
+        const existing = window.localStorage.getItem(VISITOR_ID_KEY);
+        if (existing) return existing;
+        const id = (crypto?.randomUUID?.() || `v_${Date.now()}_${Math.random().toString(16).slice(2)}`).slice(0, 64);
+        window.localStorage.setItem(VISITOR_ID_KEY, id);
+        return id;
+    } catch {
+        return `v_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+}
+
+async function trackVisit() {
+    const visitorId = getOrCreateVisitorId();
+
+    try {
+        await runTransaction(ref(db, "stats/visitsTotal"), (value) => (Number(value) || 0) + 1);
+    } catch (error) {
+        console.warn("Не удалось обновить visitsTotal", error);
+    }
+
+    try {
+        await runTransaction(ref(db, `stats/visitors/${visitorId}`), (value) => value || Date.now());
+    } catch (error) {
+        console.warn("Не удалось обновить visitors", error);
+    }
+}
+
+async function trackQuizFinished() {
+    const visitorId = getOrCreateVisitorId();
+
+    try {
+        await runTransaction(ref(db, "stats/quizzesFinishedTotal"), (value) => (Number(value) || 0) + 1);
+    } catch (error) {
+        console.warn("Не удалось обновить quizzesFinishedTotal", error);
+    }
+
+    try {
+        await runTransaction(ref(db, `stats/quizFinishers/${visitorId}`), (value) => value || Date.now());
+    } catch (error) {
+        console.warn("Не удалось обновить quizFinishers", error);
+    }
 }
 
 function getQuestionCountLabel(count) {
@@ -201,7 +264,7 @@ function updateMenuStats() {
     const timeLimitEl = document.getElementById("menu-time-limit");
 
     if (gameCountEl) gameCountEl.innerText = myGames.length;
-    if (leaderCountEl) leaderCountEl.innerText = leaders.length;
+    if (leaderCountEl) leaderCountEl.innerText = String(getLeadersTotalCount(leaders));
     if (timeLimitEl) timeLimitEl.innerText = TIME_LIMIT;
 }
 
@@ -256,6 +319,7 @@ onValue(ref(db, "games"), (snapshot) => {
 onValue(ref(db, "leaders"), (snapshot) => {
     leaders = snapshot.exists() ? normalizeCollection(snapshot.val()) : [];
     updateLeaderboardUI();
+    updateAdminLeadersUI();
     updateMenuStats();
 });
 
@@ -263,6 +327,22 @@ onValue(ref(db, "feedback"), (snapshot) => {
     feedbacks = snapshot.exists() ? normalizeCollection(snapshot.val()) : [];
     renderFeedbackList();
 });
+
+onValue(ref(db, "stats"), (snapshot) => {
+    const stats = snapshot.exists() ? snapshot.val() : {};
+    updateAdminStatsUI(stats);
+});
+
+function updateAdminStatsUI(stats) {
+    const visitsTotalEl = document.getElementById("admin-visits-total");
+    const quizzesFinishedTotalEl = document.getElementById("admin-quizzes-finished-total");
+
+    const visitsTotal = Number(stats?.visitsTotal) || 0;
+    const quizzesFinishedTotal = Number(stats?.quizzesFinishedTotal) || 0;
+
+    if (visitsTotalEl) visitsTotalEl.innerText = String(visitsTotal);
+    if (quizzesFinishedTotalEl) quizzesFinishedTotalEl.innerText = String(quizzesFinishedTotal);
+}
 
 function stopTimer() {
     if (timerInterval) clearInterval(timerInterval);
@@ -417,22 +497,38 @@ function checkLogin() {
 
 function switchAdminTab(tabName) {
     const btnGames = document.getElementById("tab-games");
+    const btnStats = document.getElementById("tab-stats");
     const btnFeedback = document.getElementById("tab-feedback");
     const secGames = document.getElementById("admin-section-games");
+    const secStats = document.getElementById("admin-section-stats");
     const secFeedback = document.getElementById("admin-section-feedback");
 
     if (tabName === "games") {
         btnGames.classList.add("tab-active");
+        if (btnStats) btnStats.classList.remove("tab-active");
         btnFeedback.classList.remove("tab-active");
         secGames.style.display = "block";
+        if (secStats) secStats.style.display = "none";
+        secFeedback.style.display = "none";
+        return;
+    }
+
+    if (tabName === "stats") {
+        btnGames.classList.remove("tab-active");
+        if (btnStats) btnStats.classList.add("tab-active");
+        btnFeedback.classList.remove("tab-active");
+        secGames.style.display = "none";
+        if (secStats) secStats.style.display = "block";
         secFeedback.style.display = "none";
         return;
     }
 
     btnFeedback.classList.add("tab-active");
     btnGames.classList.remove("tab-active");
+    if (btnStats) btnStats.classList.remove("tab-active");
     secFeedback.style.display = "block";
     secGames.style.display = "none";
+    if (secStats) secStats.style.display = "none";
 }
 
 function renderFeedbackList() {
@@ -845,6 +941,8 @@ function playGame(id) {
 
     currentQuestionIndex = 0;
     score = 0;
+    gameStartedAt = Date.now();
+    lastGameDurationMs = 0;
     closeAnswerModal();
     stopTimer();
 
@@ -997,12 +1095,18 @@ function checkAnswer(clickedButton, answer, { timedOut = false } = {}) {
 function finishGame() {
     switchScreen("result");
 
+    lastGameDurationMs = gameStartedAt ? Math.max(0, Date.now() - gameStartedAt) : 0;
+
     const totalQuestions = activeGame?.questions?.length || 0;
     const result = getResultMessage(score, totalQuestions);
 
     document.getElementById("final-score").innerText = `${score} из ${totalQuestions}`;
     document.getElementById("result-title").innerText = result.title;
     document.getElementById("result-caption").innerText = result.text;
+    const timeEl = document.getElementById("final-time");
+    if (timeEl) timeEl.innerText = `Время: ${formatDurationMs(lastGameDurationMs)}`;
+
+    trackQuizFinished();
 }
 
 function submitScore() {
@@ -1011,28 +1115,130 @@ function submitScore() {
     const input = document.getElementById("player-name");
     const name = input.value.trim() || "Гость";
 
-    leaders.push({
+    const entry = {
+        id: Date.now(),
         name,
         score,
-        game: activeGame.title
-    });
+        durationMs: lastGameDurationMs || 0,
+        gameId: activeGame.id,
+        game: activeGame.title,
+        finishedAt: Date.now()
+    };
 
-    leaders = leaders
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 20);
-
-    set(ref(db, "leaders"), leaders);
+    // В БД храним все результаты, чтобы в статистике были видны все прошедшие.
+    // Топ-100 по темам формируем только при отображении.
+    const nextLeaders = [...normalizeCollection(leaders), entry];
+    set(ref(db, "leaders"), nextLeaders);
     input.value = "";
     showLeaderboard();
+}
+
+function getLeadersTotalCount(leadersValue) {
+    return normalizeCollection(leadersValue).length;
+}
+
+function getGameTitleById(gameId) {
+    const game = myGames.find((g) => String(g.id) === String(gameId));
+    return game?.title || "";
+}
+
+function normalizeLeaderEntry(raw) {
+    const scoreValue = Number(raw?.score) || 0;
+    const durationMs = Number(raw?.durationMs);
+    const durationOk = Number.isFinite(durationMs) && durationMs >= 0;
+    const gameId = raw?.gameId ?? null;
+    const gameTitle = String(raw?.game || raw?.gameTitle || "").trim();
+
+    return {
+        id: raw?.id ?? raw?.finishedAt ?? Date.now(),
+        name: String(raw?.name || "Гость"),
+        score: scoreValue,
+        // Старые записи могли быть без времени.
+        // Важно: в Firebase нельзя записывать Infinity/NaN, поэтому используем null.
+        durationMs: durationOk ? durationMs : null,
+        gameId: gameId ?? null,
+        game: gameTitle || (gameId ? getGameTitleById(gameId) : "Без темы"),
+        finishedAt: Number(raw?.finishedAt) || 0
+    };
+}
+
+function getLeaderThemeKey(entry) {
+    if (entry?.gameId !== null && entry?.gameId !== undefined) return `id:${String(entry.gameId)}`;
+    const title = String(entry?.game || "").trim();
+    return title ? `title:${title}` : "unknown";
+}
+
+function compareLeaders(a, b) {
+    // score DESC, duration ASC, finishedAt ASC, name ASC
+    if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+    const durA = Number.isFinite(Number(a.durationMs)) ? Number(a.durationMs) : 1e18;
+    const durB = Number.isFinite(Number(b.durationMs)) ? Number(b.durationMs) : 1e18;
+    if (durA !== durB) return durA - durB;
+    const fa = Number(a.finishedAt) || 0;
+    const fb = Number(b.finishedAt) || 0;
+    if (fa !== fb) return fa - fb;
+    return String(a.name || "").localeCompare(String(b.name || ""), "ru");
+}
+
+function compactLeadersToTop100PerTheme(allLeaders, games) {
+    const normalized = normalizeCollection(allLeaders).map(normalizeLeaderEntry);
+    const byTheme = new Map();
+
+    normalized.forEach((entry) => {
+        const key = getLeaderThemeKey(entry);
+        if (!byTheme.has(key)) byTheme.set(key, []);
+        byTheme.get(key).push(entry);
+    });
+
+    const compacted = [];
+    for (const [, items] of byTheme.entries()) {
+        const sorted = items.sort(compareLeaders).slice(0, 100);
+        compacted.push(...sorted);
+    }
+
+    // Лёгкая защита от бесконтрольного роста: ограничим общий объём (при большом числе тем).
+    // Сохраняем только записи по известным темам/заголовкам + последние записи как fallback.
+    if (compacted.length <= 5000) return compacted;
+
+    const knownTitles = new Set(normalizeCollection(games).map((g) => String(g?.title || "").trim()).filter(Boolean));
+    const filtered = compacted.filter((e) => knownTitles.has(String(e.game || "").trim()));
+    return filtered.slice(0, 5000);
 }
 
 function updateLeaderboardUI() {
     const container = document.getElementById("leader-data");
     const totalEl = document.getElementById("leaderboard-total");
+    const tabs = document.getElementById("leader-theme-tabs");
     if (!container) return;
 
-    const sortedLeaders = [...leaders].sort((a, b) => b.score - a.score).slice(0, 20);
-    if (totalEl) totalEl.innerText = sortedLeaders.length;
+    const normalized = normalizeCollection(leaders).map(normalizeLeaderEntry);
+
+    const themeOptions = [
+        { id: "all", title: "Все темы" },
+        ...myGames.map((g) => ({ id: String(g.id), title: g.title || "Без названия" }))
+    ];
+
+    if (!themeOptions.some((t) => t.id === String(selectedLeaderboardGameId))) {
+        selectedLeaderboardGameId = "all";
+    }
+
+    if (tabs) {
+        tabs.innerHTML = themeOptions.map((opt) => `
+            <button type="button"
+                class="theme-tab ${String(selectedLeaderboardGameId) === String(opt.id) ? "is-active" : ""}"
+                onclick="window.selectLeaderboardTheme('${String(opt.id).replace(/'/g, "\\'")}')"
+            >${escapeHtml(opt.title)}</button>
+        `).join("");
+    }
+
+    const isAllThemes = String(selectedLeaderboardGameId) === "all";
+    const filtered = isAllThemes
+        ? normalized
+        : normalized.filter((e) => String(e.gameId) === String(selectedLeaderboardGameId) || String(e.game) === getGameTitleById(selectedLeaderboardGameId));
+
+    const sortedAll = filtered.sort(compareLeaders);
+    const sortedLeaders = isAllThemes ? sortedAll : sortedAll.slice(0, 100);
+    if (totalEl) totalEl.innerText = String(sortedLeaders.length);
 
     if (!sortedLeaders.length) {
         container.innerHTML = "<div class='empty-state'>Пока нет сохранённых результатов. Пройдите тему и станьте первым участником рейтинга.</div>";
@@ -1042,6 +1248,7 @@ function updateLeaderboardUI() {
     container.innerHTML = sortedLeaders.map((leader, index) => {
         const rank = index + 1;
         const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
+        const timeLabel = Number.isFinite(Number(leader.durationMs)) ? formatDurationMs(leader.durationMs) : "—";
 
         return `
             <div class="leader-card" data-rank="${rank}">
@@ -1050,7 +1257,64 @@ function updateLeaderboardUI() {
                     <span class="leader-name">${escapeHtml(leader.name || "Гость")}</span>
                     <span class="leader-game">${escapeHtml(leader.game || "Без темы")}</span>
                 </div>
-                <div class="leader-score">${leader.score ?? 0}</div>
+                <div class="leader-metrics">
+                    <div class="leader-score">${leader.score ?? 0}</div>
+                    <div class="leader-time">Время: ${escapeHtml(timeLabel)}</div>
+                </div>
+            </div>`;
+    }).join("");
+}
+
+function updateAdminLeadersUI() {
+    const tabs = document.getElementById("admin-leader-tabs");
+    const list = document.getElementById("admin-leader-list");
+    if (!tabs || !list) return;
+
+    const normalized = normalizeCollection(leaders).map(normalizeLeaderEntry);
+    const themeOptions = [
+        { id: "all", title: "Все темы" },
+        ...myGames.map((g) => ({ id: String(g.id), title: g.title || "Без названия" }))
+    ];
+
+    if (!themeOptions.some((t) => t.id === String(selectedAdminLeadersGameId))) {
+        selectedAdminLeadersGameId = "all";
+    }
+
+    tabs.innerHTML = themeOptions.map((opt) => `
+        <button type="button"
+            class="theme-tab ${String(selectedAdminLeadersGameId) === String(opt.id) ? "is-active" : ""}"
+            onclick="window.selectAdminLeadersTheme('${String(opt.id).replace(/'/g, "\\'")}')"
+        >${escapeHtml(opt.title)}</button>
+    `).join("");
+
+    const filtered = String(selectedAdminLeadersGameId) === "all"
+        ? normalized
+        : normalized.filter((e) => String(e.gameId) === String(selectedAdminLeadersGameId) || String(e.game) === getGameTitleById(selectedAdminLeadersGameId));
+
+    // В админке показываем всех (сортировка по "сильнее/быстрее").
+    // Чтобы не перегружать DOM при очень большом количестве записей — ограничим рендер 2000.
+    const sorted = filtered.sort(compareLeaders);
+    const render = sorted.slice(0, 2000);
+
+    if (!render.length) {
+        list.innerHTML = "<div class='empty-state'>Результатов пока нет.</div>";
+        return;
+    }
+
+    list.innerHTML = render.map((leader, index) => {
+        const timeLabel = Number.isFinite(Number(leader.durationMs)) ? formatDurationMs(leader.durationMs) : "—";
+        const title = leader.game || "Без темы";
+        const subtitle = `#${index + 1} • ${leader.score ?? 0} правильных • Время: ${timeLabel}`;
+
+        return `
+            <div class="list-item">
+                <div class="list-item__meta">
+                    <span class="list-item__title">${escapeHtml(leader.name || "Гость")}</span>
+                    <span class="list-item__sub">${escapeHtml(title)} • ${escapeHtml(subtitle)}</span>
+                </div>
+                <div class="list-item__actions">
+                    <span class="type-pill" data-type="choice">${escapeHtml(String(leader.score ?? 0))}</span>
+                </div>
             </div>`;
     }).join("");
 }
@@ -1062,6 +1326,7 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleEditorFields();
     applyScreenFromQuery();
     applyFigmaExportMode();
+    trackVisit();
 
     const adminPass = document.getElementById("admin-pass");
     if (adminPass) {
@@ -1095,3 +1360,12 @@ window.checkAnswer = checkAnswer;
 window.submitScore = submitScore;
 window.submitFeedback = submitFeedback;
 window.deleteFeedback = deleteFeedback;
+window.selectLeaderboardTheme = function (id) {
+    selectedLeaderboardGameId = String(id || "all");
+    updateLeaderboardUI();
+};
+
+window.selectAdminLeadersTheme = function (id) {
+    selectedAdminLeadersGameId = String(id || "all");
+    updateAdminLeadersUI();
+};
