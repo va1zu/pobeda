@@ -55,6 +55,14 @@ body {
     overscroll-behavior-y: none;
 }
 
+/* Мобильные браузеры (особенно iOS) могут “врать” с 100vh из-за адресной строки.
+   Используем динамический viewport, чтобы ничего не обрезалось. */
+@supports (height: 100dvh) {
+    body {
+        min-height: 100dvh;
+    }
+}
+
 input,
 textarea,
 select {
@@ -127,6 +135,12 @@ body::after {
         inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
+@supports (height: 100dvh) {
+    .main-wrap {
+        height: min(96dvh, 980px);
+    }
+}
+
 .main-wrap::before {
     content: "";
     position: absolute;
@@ -160,6 +174,12 @@ body::after {
     min-height: 0; /* ИЗМЕНЕНО: необходимо для правильной работы скролла во flex */
     overflow-y: auto; /* ИЗМЕНЕНО: скролл теперь здесь */
     animation: fade-in 240ms ease;
+}
+
+/* Безопасные зоны (нижний вырез/панель жестов) */
+.screen {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    scroll-padding-bottom: max(18px, env(safe-area-inset-bottom));
 }
 
 .screen.active {
@@ -242,6 +262,7 @@ body.figma-export .answer-modal__backdrop {
 
 .content-pad--game {
     padding-top: 20px;
+    padding-bottom: 24px;
 }
 
 .screen-shell {
@@ -1743,6 +1764,7 @@ button.wrong,
 
     .content-pad--game {
         padding-top: 14px;
+        padding-bottom: 26px;
     }
 
     .panel-card,
@@ -1887,6 +1909,12 @@ button.wrong,
         border-radius: 20px;
     }
 
+    @supports (height: 100dvh) {
+        .main-wrap {
+            height: 100dvh;
+        }
+    }
+
     .tabs {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1992,5 +2020,13 @@ button.wrong,
     .question-text {
         font-size: clamp(28px, 8.2vw, 38px);
         margin-bottom: 16px;
+    }
+}
+
+/* Очень низкие экраны: добавляем воздуха снизу,
+   чтобы последний ответ гарантированно прокручивался до конца. */
+@media (max-height: 680px) {
+    .content-pad--game {
+        padding-bottom: 40px;
     }
 }
