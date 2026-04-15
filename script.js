@@ -3,17 +3,18 @@ import { getDatabase, ref, set, onValue, runTransaction } from "https://www.gsta
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyChsg1t0QKS_sSThC0KHZbluyNxMDkRlJo",
-    authDomain: "kod-pobedy.firebaseapp.com",
-    databaseURL: "https://kod-pobedy-default-rtdb.firebaseio.com",
-    projectId: "kod-pobedy",
-    storageBucket: "kod-pobedy.firebasestorage.app",
-    messagingSenderId: "372401802248",
-    appId: "1:372401802248:web:e2080dfbd9e335e30b55bd"
+  apiKey: "AIzaSyAOmGR_yDK1sZ5bYnwnLPPaniCMYCQJ_AM",
+  authDomain: "pobeda-24261.firebaseapp.com",
+  databaseURL: "https://pobeda-24261-default-rtdb.firebaseio.com",
+  projectId: "pobeda-24261",
+  storageBucket: "pobeda-24261.firebasestorage.app",
+  messagingSenderId: "922936862863",
+  appId: "1:922936862863:web:168ca167631cc9477b28fa"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+const USE_FIREBASE = !Object.values(firebaseConfig).some((v) => String(v).includes("__FIREBASE_"));
+const app = USE_FIREBASE ? initializeApp(firebaseConfig) : null;
+const db = USE_FIREBASE ? getDatabase(app) : null;
 const STORAGE_BUCKET = String(firebaseConfig.storageBucket || "").startsWith("gs://")
     ? String(firebaseConfig.storageBucket)
     : `gs://${firebaseConfig.storageBucket}`;
